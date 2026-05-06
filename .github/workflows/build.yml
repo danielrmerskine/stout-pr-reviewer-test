@@ -9,29 +9,22 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/zephyrproject-rtos/ci:v0.27.4
-      options: --user root
-    env:
-      ZEPHYR_TOOLCHAIN_VARIANT: zephyr
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           path: app
           fetch-depth: 0
-          # token+ref so we can push back to the PR branch
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
-      - name: Initialize west workspace
-        working-directory: ${{ github.workspace }}
-        run: |
-          west init -l app
-          west update --narrow -o=--depth=1
-          west zephyr-export
+      - name: Setup Zephyr workspace
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: app
+          manifest-file-name: west.yml
+          toolchains: arm-zephyr-eabi
 
       - name: Build firmware
         working-directory: ${{ github.workspace }}
