@@ -1,0 +1,13 @@
+build/
+.west/
+modules/
+zephyr/
+nrf/
+nrfxlib/
+bootloader/
+test/
+tools/
+.vscode/
+.idea/
+*.swp
+.DS_Store

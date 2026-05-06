@@ -1,0 +1,66 @@
+name: build
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci:v0.27.4
+      options: --user root
+    env:
+      ZEPHYR_TOOLCHAIN_VARIANT: zephyr
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: app
+          fetch-depth: 0
+          # token+ref so we can push back to the PR branch
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+      - name: Initialize west workspace
+        working-directory: ${{ github.workspace }}
+        run: |
+          west init -l app
+          west update --narrow -o=--depth=1
+          west zephyr-export
+
+      - name: Build firmware
+        working-directory: ${{ github.workspace }}
+        run: |
+          west build -b nrf5340dk/nrf5340/cpuapp app
+
+      - name: Stage built artifact
+        working-directory: ${{ github.workspace }}/app
+        run: |
+          mkdir -p built
+          cp ../build/zephyr/zephyr.hex built/firmware.hex
+          ls -la built/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: ${{ github.workspace }}/app/built/firmware.hex
+
+      - name: Commit built hex back to PR branch
+        if: github.event_name == 'pull_request'
+        working-directory: ${{ github.workspace }}/app
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add built/firmware.hex
+          if git diff --cached --quiet; then
+            echo "No firmware change to commit"
+            exit 0
+          fi
+          git commit -m "ci: build artifact [skip ci]"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
